@@ -1,0 +1,8 @@
+# GAC Kiosk — labwc autostart
+# Wayland-native: do NOT use xset (spawns Xwayland, wastes CPU)
+
+# Hide cursor after idle
+unclutter -idle 0 &
+
+# Start kiosk after brief boot delay (schedule script reads ~/kiosk.conf)
+sleep 3 && ~/kiosk-schedule.sh start &

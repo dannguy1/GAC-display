@@ -1,0 +1,10 @@
+# GAC Kiosk — kanshi display config
+# Forces 1920x1080@60Hz regardless of TV/monitor capabilities
+
+profile tv {
+  output HDMI-A-1 mode 1920x1080@60Hz position 0,0
+}
+
+profile default {
+  output "*" mode 1920x1080@60Hz position 0,0
+}

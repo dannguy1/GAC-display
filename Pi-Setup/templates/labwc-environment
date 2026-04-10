@@ -1,0 +1,7 @@
+XKB_DEFAULT_MODEL=pc105
+XKB_DEFAULT_LAYOUT=us
+XKB_DEFAULT_VARIANT=
+XKB_DEFAULT_OPTIONS=
+
+# Disable Xwayland (pure Wayland kiosk — no X11 apps needed)
+WLR_XWAYLAND=

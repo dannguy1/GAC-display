@@ -1,0 +1,2 @@
+# Kiosk mode: desktop and panel disabled
+/usr/bin/kanshi &
