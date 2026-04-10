@@ -3,3 +3,6 @@ dist/
 .env
 .env.local
 *.local
+
+# Agent work artifacts
+.agent_work/

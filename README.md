@@ -31,11 +31,16 @@ card types, session contract, and backlog.
 ## Project Structure
 
 ```
-shell/              ← persistent kiosk shell (SSE subscriber + iframe loader)
+shell/              ← persistent kiosk shell (SSE subscriber + scheduler + iframe loader)
 sessions/
   menu/             ← default session: rotating menu item cards
+  announcement/     ← full-screen text announcements
+  happy-hour/       ← drink/appetizer specials with countdown timer
 docs/
-  sessions.md       ← guide to building new sessions
+  sessions.md       ← session implementation reference
+  guides/           ← configuration and authoring guides
+test/
+  mock-sse.mjs      ← mock SSE server for testing
 ```
 
 ## Sessions
@@ -43,9 +48,36 @@ docs/
 | Session | Port | Status | Description |
 |---------|------|--------|-------------|
 | `menu`  | 8504 | ✅ Live | Rotating menu item cards (landscape split layout) |
-| `happy-hour` | — | 🔲 Planned | Video/image + cocktail specials + countdown |
-| `events` | — | 🔲 Planned | Upcoming events |
-| `announcement` | — | 🔲 Planned | Full-screen custom messages |
+| `announcement` | 8505 | ✅ Live | Full-screen text announcements (info/warning/promo) |
+| `happy-hour` | 8506 | ✅ Live | Drink/appetizer specials with live countdown timer |
+| `events` | — | 🔲 Planned | Upcoming events calendar |
+
+## Testing Session Switching
+
+A mock SSE server is included for testing without the full backend:
+
+```bash
+# Terminal 1 — menu session
+cd sessions/menu && npm run dev              # :8504
+
+# Terminal 2 — announcement session
+cd sessions/announcement && npm run dev      # :8505
+
+# Terminal 3 — happy-hour session
+cd sessions/happy-hour && npm run dev        # :8506
+
+# Terminal 4 — shell
+cd shell && npm run dev                      # :8503
+
+# Terminal 5 — mock SSE server (replaces the real backend)
+node test/mock-sse.mjs                       # :8000
+```
+
+The mock server loops: sends menu content → switches to announcements →
+sends announcement content → switches back to menu.
+
+The shell's local scheduler also fires session switches based on
+`shell/public/schedule.json` — see `docs/guides/scheduling.md`.
 
 ## Related
 

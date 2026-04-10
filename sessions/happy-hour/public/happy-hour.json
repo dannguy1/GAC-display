@@ -1,0 +1,54 @@
+{
+  "title": "Happy Hour",
+  "subtitle": "Weekdays 3–6 PM",
+  "end_hour": 18,
+  "end_minute": 0,
+  "background_image": "",
+  "specials": [
+    {
+      "name": "House Saigon Lager",
+      "category": "Drinks",
+      "description": "Crisp Vietnamese-style lager, ice cold.",
+      "price": 5.00,
+      "original_price": 8.00,
+      "image_path": "",
+      "tag": "Half Price"
+    },
+    {
+      "name": "Passion Fruit Mojito",
+      "category": "Cocktails",
+      "description": "Fresh passion fruit, mint, lime, and rum over crushed ice.",
+      "price": 7.00,
+      "original_price": 13.00,
+      "image_path": "",
+      "tag": "Special"
+    },
+    {
+      "name": "Crispy Spring Rolls",
+      "category": "Appetizers",
+      "description": "Pork and shrimp spring rolls with house dipping sauce.",
+      "price": 5.50,
+      "original_price": 10.95,
+      "image_path": "",
+      "tag": "Half Price"
+    },
+    {
+      "name": "Salt & Pepper Calamari",
+      "category": "Appetizers",
+      "description": "Lightly battered calamari with garlic, jalapeño, and lime salt.",
+      "price": 6.00,
+      "original_price": 11.95,
+      "image_path": "",
+      "tag": "Half Price"
+    },
+    {
+      "name": "Vietnamese Iced Coffee",
+      "category": "Drinks",
+      "description": "Strong drip coffee with sweetened condensed milk over ice.",
+      "price": 3.50,
+      "original_price": 5.50,
+      "image_path": "",
+      "tag": "Special"
+    }
+  ]
+}

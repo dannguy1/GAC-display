@@ -2,17 +2,15 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { resolve } from 'path';
 
-// Default session URL — override via VITE_SESSION_MENU_URL in .env
-// In production both shell and sessions are served from the same origin.
 export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: {
-      '@gac/agent-sdk': resolve(__dirname, '../lib/agent-sdk'),
+      '@gac/agent-sdk': resolve(__dirname, '../../lib/agent-sdk'),
     },
   },
   server: {
-    port: 8503,
+    port: 8505,
     host: '0.0.0.0',
     allowedHosts: ['gacaiserver', 'localhost'],
     proxy: {

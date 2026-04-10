@@ -1,0 +1,23 @@
+{
+  "sessions": {
+    "announcement": "http://192.168.10.3:8505",
+    "happy-hour": "http://192.168.10.3:8506"
+  },
+  "schedule": [
+    {
+      "session": "announcement",
+      "type": "interval",
+      "every_minutes": 10,
+      "duration_seconds": 30
+    },
+    {
+      "session": "happy-hour",
+      "type": "windowed",
+      "start_time": "15:00",
+      "end_time": "18:00",
+      "every_minutes": 5,
+      "days": ["mon", "tue", "wed", "thu", "fri"],
+      "duration_seconds": 45
+    }
+  ]
+}

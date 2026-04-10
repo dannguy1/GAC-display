@@ -1,0 +1,103 @@
+.hh-card {
+    display: flex;
+    flex-direction: row;
+    width: 85vw;
+    max-width: 1300px;
+    height: 68vh;
+    background: linear-gradient(135deg, #1a120d 0%, #2a1a10 100%);
+    border: 1px solid rgba(198, 137, 63, 0.3);
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow:
+        0 8px 40px rgba(0, 0, 0, 0.4),
+        inset 0 1px 0 rgba(198, 137, 63, 0.1);
+}
+
+/* Left — image */
+.hh-card__image-wrap {
+    position: relative;
+    flex: 1.1;
+    overflow: hidden;
+    background: #1a120d;
+}
+
+.hh-card__image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    filter: brightness(0.95) saturate(1.1);
+}
+
+.hh-card__tag {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    background: linear-gradient(135deg, #c6893f 0%, #e6a84d 100%);
+    color: #1a120d;
+    font-family: var(--font-sans);
+    font-size: 0.8rem;
+    font-weight: 700;
+    padding: 6px 18px;
+    border-radius: 20px;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+}
+
+/* Right — info */
+.hh-card__info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: clamp(2rem, 4vw, 4rem);
+    gap: 0.75rem;
+}
+
+.hh-card__category {
+    font-family: var(--font-sans);
+    font-size: clamp(0.7rem, 1.1vw, 0.85rem);
+    font-weight: 600;
+    color: #c6893f;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+}
+
+.hh-card__name {
+    font-family: var(--font-serif);
+    font-size: clamp(1.8rem, 3vw, 2.8rem);
+    font-weight: 600;
+    color: #f5efe6;
+    line-height: 1.15;
+    margin: 0;
+}
+
+.hh-card__desc {
+    font-family: var(--font-sans);
+    font-size: clamp(0.85rem, 1.3vw, 1.1rem);
+    color: rgba(245, 239, 230, 0.65);
+    line-height: 1.6;
+    max-width: 48ch;
+    margin: 0;
+}
+
+.hh-card__prices {
+    display: flex;
+    align-items: baseline;
+    gap: 1rem;
+    margin-top: 0.5rem;
+}
+
+.hh-card__original {
+    font-family: var(--font-sans);
+    font-size: clamp(1.2rem, 2vw, 1.6rem);
+    color: rgba(245, 239, 230, 0.35);
+    text-decoration: line-through;
+}
+
+.hh-card__price {
+    font-family: var(--font-sans);
+    font-size: clamp(2rem, 3.5vw, 3rem);
+    font-weight: 700;
+    color: #e6a84d;
+}

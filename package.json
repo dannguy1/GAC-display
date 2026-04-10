@@ -1,0 +1,12 @@
+{
+  "private": true,
+  "type": "module",
+  "name": "gac-display",
+  "description": "GAC-Display — modular digital signage frontend",
+  "scripts": {
+    "test": "node --test test/unit/*.test.mjs",
+    "test:integration": "node --test test/integration/services.test.mjs",
+    "test:build": "node --test test/integration/build.test.mjs",
+    "test:all": "node --test test/unit/*.test.mjs test/integration/*.test.mjs"
+  }
+}

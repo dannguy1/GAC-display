@@ -2,38 +2,54 @@
 
 ## Vision
 
-GAC-Display is a modular digital signage system for Garlic & Chives restaurant.
-It decouples **what to show** (decided by the display-agent) from **how to show it**
-(handled by self-contained session pages), making it easy to add new display
-experiences without touching existing ones.
+GAC-Display is a modular digital signage system for Garlic & Chives restaurant,
+built on an **orchestrator + agent** architecture. The shell acts as an
+**orchestrator** — it subscribes to backend SSE, runs the session scheduler, and
+manages agent lifecycle. Each session is a **specialized agent** — a
+self-contained page that registers its capabilities, reports its state, and
+responds to health checks.
+
+This architecture decouples scheduling and rendering from content production,
+making it easy to add new display agents without touching existing ones.
 
 ---
 
-## Two-Layer Architecture
+## Orchestrator + Agent Architecture
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│  SHELL  (always running on kiosk browser)           │
-│  • Subscribes to SSE from display-agent             │
-│  • Receives session directives → swaps iframe src   │
-│  • Forwards content events to active session        │
-│    via window.postMessage                           │
+│  SHELL  (orchestrator, always running)              │
+│  • Subscribes to SSE for menu content               │
+│  • Runs local scheduler → swaps iframe src          │
+│  • Maintains agent registry (capabilities, health)  │
+│  • Forwards typed messages to active agent           │
+│  • Health-pings active agent every 10s              │
 │  • Port 8503 (dev)                                  │
 └──────────────────┬──────────────────────────────────┘
-                   │  <iframe src> — swappable
+                   │  <iframe src> — swappable agent
         ┌──────────┴─────────────────────────┐
-        │  SESSION PAGE  (self-contained)    │
+        │  SESSION PAGE  (specialized agent)  │
         │                                    │
-        │  sessions/menu    ← DEFAULT        │
-        │  sessions/happy-hour  ← future     │
-        │  sessions/events      ← future     │
-        │  sessions/announcement← future     │
+        │  sessions/menu         ← DEFAULT   │
+        │  sessions/announcement ← scheduled │
+        │  sessions/happy-hour   ← scheduled │
         └────────────────────────────────────┘
 ```
 
-The shell is the **persistent SSE subscriber**. Session pages are swappable
-display experiences — they can be simple React pages, video players, anything
-that runs in a browser.
+The shell is the **orchestrator** — it owns the SSE connection, the session
+scheduler, and the agent registry. Session pages are **specialized agents** that
+register their capabilities on mount, report their state, and respond to health
+pings. Only one agent is active at a time.
+
+### Content Ownership
+
+| Layer | Role | Owns |
+|-------|------|------|
+| GAC-Concierge | Content provider | Menu data, images, SSE stream |
+| Shell | Orchestrator | Scheduling, SSE forwarding, agent lifecycle, health monitoring |
+| Menu session | Agent | Menu card rendering, slide carousel |
+| Announcement session | Agent | Announcement content + rendering |
+| Happy-hour session | Agent | Specials content + rendering, countdown |
 
 ---
 
@@ -41,9 +57,14 @@ that runs in a browser.
 
 The backend display-agent broadcasts over `GET /v1/display/stream` (SSE).
 
-### Event: `session` — Session Directive
+### Event: `session` — Session Directive (future)
 
-Tells the shell to load a different display experience:
+> **Not currently implemented.** Session switching is handled by the shell's
+> local scheduler (`schedule.js`). This event type is reserved for a future
+> backend-driven session control path.
+
+When implemented, this event would tell the shell to load a different display
+experience:
 
 ```json
 {
@@ -58,8 +79,8 @@ Tells the shell to load a different display experience:
 }
 ```
 
-The shell updates `<iframe src>` to `session.url`. If `display.duration` is set,
-the shell auto-returns to the default session after that many seconds.
+The shell would update `<iframe src>` to `session.url`. If `display.duration` is
+set, the shell would auto-return to the default session after that many seconds.
 
 ### Event: `content` — Content Push
 
@@ -78,13 +99,14 @@ Sends typed cards to the active session:
 }
 ```
 
-> **Migration note**: The current `display_agent.py` in GAC-Concierge uses a
-> legacy `items` key (flat list of menu item objects). The typed `cards` envelope
-> is the target design. Migration is tracked in the backlog.
+The backend sends typed `cards` envelopes. Agents filter cards by their
+declared `cardTypes`.
 
 ### Per-Card Display Override (future)
 
-Individual cards can override the envelope-level `display` settings:
+> **Not currently implemented.** Tracked in the backlog.
+
+Individual cards would override the envelope-level `display` settings:
 
 ```json
 {
@@ -94,32 +116,208 @@ Individual cards can override the envelope-level `display` settings:
 }
 ```
 
-The session reads `card.display?.item_interval ?? envelope.display.item_interval`.
+The session would read `card.display?.item_interval ?? envelope.display.item_interval`.
 
 ---
 
-## Shell → Session Communication
+## Agent Protocol
 
-The shell forwards `content` events to the active session via `postMessage`:
+All communication between the orchestrator (shell) and agents (sessions) flows
+through `window.postMessage` with origin verification on both sides. Protocol
+constants are defined in `lib/agent-sdk/protocol.js` — the single source of
+truth shared by shell and all agents.
+
+### Message Format
+
+Every message carries a `source` identifier, a `type` discriminator, and an
+optional `payload`:
 
 ```js
-// Shell sends
-iframeRef.current.contentWindow.postMessage(
-  { source: 'gac-display-shell', payload: contentEvent },
-  targetOrigin   // '*' in dev; explicit origin in production
-);
+// Shell → Agent
+{ source: 'gac-display-shell', type: 'content' | 'ping' | 'pause' | 'resume', payload?: {...} }
 
-// Session listens
-window.addEventListener('message', (e) => {
-  if (e.data?.source === 'gac-display-shell') {
-    handleContent(e.data.payload);
-  }
-});
+// Agent → Shell
+{ source: 'gac-display-agent', type: 'register' | 'status' | 'pong', ...fields }
 ```
 
-Sessions **may also** connect directly to SSE as a fallback (useful in dev mode
-where shell and session run on different ports). Direct SSE takes priority;
-postMessage is used when the session is loaded inside the shell iframe.
+### Shell → Agent Messages
+
+| Type | Purpose | Payload |
+|------|---------|---------|
+| `content` | Forward a content envelope | `{ display?, cards? }` |
+| `ping` | Health check request | _(none)_ |
+| `pause` | Pause playback | _(none)_ |
+| `resume` | Resume playback | _(none)_ |
+
+### Agent → Shell Messages
+
+| Type | Purpose | Fields |
+|------|---------|--------|
+| `register` | Declare capabilities on mount | `capabilities: { cardTypes?, selfLoading?, acceptsContent? }` |
+| `status` | Report state change | `state: 'idle'\|'playing'\|'paused'\|'error'\|'ended'`, `detail?: { total?, reason? }` |
+| `pong` | Respond to health ping | _(none)_ |
+
+### Agent Lifecycle States
+
+| State | Meaning |
+|-------|---------|
+| `loading` | Iframe loading, agent not yet registered |
+| `idle` | Registered but no content displayed |
+| `playing` | Actively displaying content |
+| `paused` | Paused by orchestrator command |
+| `error` | Encountered an error (detail includes reason) |
+| `ended` | Content finished (e.g., happy hour expired) |
+| `unresponsive` | Failed to respond to health pings |
+
+### Content Delivery Strategy
+
+Sessions receive content through **exactly one** delivery path at a time:
+
+| Context | Delivery path | SSE connection |
+|---------|---------------|----------------|
+| Inside shell iframe | postMessage from shell | Agent does **not** open SSE |
+| Standalone (dev/debug) | Direct SSE | Agent opens its own EventSource |
+
+Agents detect their context on mount:
+
+```js
+import { insideIframe } from '@gac/agent-sdk';
+```
+
+If `insideIframe` is true, the agent skips its own SSE connection and relies
+entirely on postMessage from the shell. This prevents **duplicate event
+processing** and avoids wasting the browser's limited SSE connection pool.
+
+### postMessage Security
+
+Both directions verify origins:
+
+**Shell → Agent**: The shell sets `targetOrigin` to the agent's origin
+(extracted from the iframe `src` URL). If the URL cannot be parsed, the message
+is **not sent** (no `'*'` fallback):
+
+```js
+const sendToAgent = (type, payload) => {
+    let origin;
+    try { origin = new URL(sessionUrl).origin; }
+    catch { return; }
+    iframe.contentWindow.postMessage(
+        { source: 'gac-display-shell', type, payload },
+        origin
+    );
+};
+```
+
+**Agent → Shell**: The shell verifies that incoming messages originate
+from the active agent's origin:
+
+```js
+const expectedOrigin = new URL(sessionUrlRef.current).origin;
+if (e.origin !== expectedOrigin) return;
+if (e.data?.source !== 'gac-display-agent') return;
+```
+
+**Agent receives**: The SDK's `onContent()` and `setupAgent()` handle origin
+verification and message filtering automatically. Agents never need to
+manually add `message` event listeners:
+
+```js
+import { onContent, setupAgent } from '@gac/agent-sdk';
+
+// onContent filters to content messages only
+const cleanup = onContent((envelope) => handleContent(envelope));
+
+// setupAgent handles ping/pong, pause/resume automatically
+const cleanup2 = setupAgent(capabilities, { onPause, onResume });
+```
+
+### Agent Registration Handshake
+
+When the shell swaps `iframe.src`, there is a window where the new agent is
+loading. The registration handshake ensures no content is lost:
+
+1. **Agent registers** — on mount, the session sends `register` with its
+   capabilities:
+
+   ```js
+   setupAgent(
+       { cardTypes: ['menu_item'], selfLoading: false, acceptsContent: true },
+       { onPause: handlePause, onResume: handleResume }
+   );
+   ```
+
+   This sends a `register` message, starts the auto-pong responder, and
+   wires up pause/resume handlers.
+
+2. **Orchestrator records** — the shell stores the agent's capabilities in the
+   registry and replays the last buffered content envelope immediately.
+
+3. **Load timeout** — if the shell does not receive `register` within
+   `SESSION_LOAD_TIMEOUT_MS` (10 s), it falls back to the default session
+   URL and logs a warning.
+
+```
+Orchestrator (Shell)            Agent (Session iframe)
+  │                                │
+  │── set iframe.src ─────────────►│
+  │   (clear registry, buffer)     │  loading…
+  │                                │
+  │◄── register { capabilities } ──│  mounted + setupAgent()
+  │   (registry.register())        │
+  │                                │
+  │── content { payload } ────────►│  (buffered replay)
+  │── content { payload } ────────►│  (live SSE events)
+  │                                │
+  │── ping ───────────────────────►│  (every 10s)
+  │◄── pong ──────────────────────│  (auto via setupAgent)
+  │                                │
+  │── pause ──────────────────────►│  (orchestrator pauses)
+  │◄── status { paused } ─────────│
+  │── resume ─────────────────────►│  (orchestrator resumes)
+  │◄── status { playing } ────────│
+  │                                │
+  │◄── status { playing, ... } ───│  (on content change)
+  │                                │
+```
+
+### Health Monitoring
+
+The shell pings the active agent every `PING_INTERVAL_MS` (10 s).
+The agent's `setupAgent()` function automatically replies with `pong`.
+
+If no `pong` arrives within 30 seconds (3 missed pings), the shell marks the
+agent as `unresponsive`, logs a warning, and falls back to the default session.
+
+### Agent Registry
+
+The shell maintains an agent registry (`registry.js`) tracking:
+
+- **url** — The active agent's URL (for identification)
+- **capabilities** — Card types handled, self-loading flag, accepts-content flag
+- **state** — Last reported lifecycle state (idle, playing, paused, error, ended)
+- **health** — Timestamp of last pong (used for health timeout)
+- **errors** — Error count and last error message
+
+The registry provides:
+- `acceptsContent()` — checks if the active agent accepts shell-forwarded content
+- `getSnapshot()` — returns a safe copy for React state (used by debug overlay)
+
+The registry is cleared whenever the shell loads a new session and populated
+when the new agent sends `register`.
+
+### Event Type Dispatch
+
+The shell dispatches SSE events by `event_type`. Only `content` events are
+handled — forwarded to the active agent if it declares `acceptsContent: true`:
+
+```js
+if (data.event_type === 'content' || data.cards || data.items)
+    → store as lastContentEnvelope
+    → if registry.acceptsContent() → sendToAgent('content', data)
+```
+
+Session switching is handled entirely by the local scheduler (— the shell does
+**not** act on `event_type: 'session'` from the backend.
 
 ---
 
@@ -128,11 +326,12 @@ postMessage is used when the session is loaded inside the shell iframe.
 | Type          | Description                            | Status      |
 |---------------|----------------------------------------|-------------|
 | `menu_item`   | Menu item — image, name, price, desc   | ✅ Implemented |
-| `message`     | Full-screen text announcement          | 🔲 Planned  |
+| `message`     | Full-screen text announcement          | ✅ Implemented |
 | `special`     | Today's special with emphasis styling  | 🔲 Planned  |
 | `promotion`   | Promotional deal with optional image   | 🔲 Planned  |
 
-Card renderer dispatch pattern:
+Card renderer dispatch pattern (aspirational — each session currently handles
+its own card types inline rather than sharing a unified renderer):
 
 ```jsx
 function CardRenderer({ card }) {
@@ -150,52 +349,187 @@ function CardRenderer({ card }) {
 
 ## Sessions
 
-### `menu` — Default Session (implemented)
+### `menu` — Default Session
 
 - **Location**: `sessions/menu/`
 - **Dev port**: 8504
-- **Data source**: Direct SSE + postMessage fallback
+- **Content source**: postMessage from shell (iframe) / direct SSE (standalone)
+- **Content loading**: Shell-forwarded — receives menu `cards` via SSE → postMessage
 - **Card type**: `menu_item`
 - **Layout**: Landscape split — large image left, info panel right
-- **Transition**: Horizontal slide (700ms, Material ease)
-- **Idle screen**: Garlic & Chives logo with brand styling
+- **Transition**: Horizontal slide (700ms, cubic-bezier Material ease)
+- **Idle screen**: Garlic & Chives logo, "Featured dishes loading…" / "Connecting to server…"
+- **Data fields**: `item_name`, `item_viet`, `price`, `description`, `category`, `image_path`, `popular`
 
-### `happy-hour` — Future
+```
+┌─────────────────────────────────────────────────────────────┐
+│                                                             │
+│  ┌──────────────────────┬──────────────────────────────┐   │
+│  │                      │  SEAFOOD                     │   │
+│  │                      │                              │   │
+│  │      [image]         │  Honey Walnut Shrimps        │   │
+│  │                      │  Tôm Walnut Mật Ong          │   │
+│  │         POPULAR      │  ─────                       │   │
+│  │                      │  Crispy shrimp tossed in...  │   │
+│  │                      │                              │   │
+│  │                      │  $13.00                      │   │
+│  └──────────────────────┴──────────────────────────────┘   │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
 
-- Full-screen background video or image
-- Cocktail/appetizer specials overlay
-- Countdown timer to end of happy hour
-- Returns to `menu` session automatically when timer expires
+### `announcement` — Announcement Session
 
-### `events` — Future
+- **Location**: `sessions/announcement/`
+- **Dev port**: 8505
+- **Content source**: Self-loaded from `public/announcements.json`; shell postMessage as override
+- **Content loading**: Hybrid — fetches local JSON on mount, also accepts postMessage
+- **Card type**: `message`
+- **Layout**: Centered card — headline, body, style-variant accent bar
+- **Transition**: Fade (600ms)
+- **Idle screen**: Garlic & Chives logo, "Waiting for announcements…"
+- **Data fields**: `headline`, `body`, `style` (info | warning | promo)
+- **Styles**:
+  - `info` — green accent, ℹ icon, general information
+  - `warning` — gold/amber accent, ⚠ icon, alerts and closing times
+  - `promo` — gold→green gradient, ★ icon, specials and deals
+- **Rotation**: Single message displays statically; multiple rotate at 10s interval
 
-- Upcoming events calendar or list
-- Could be driven by a `events.json` data file
+```
+┌─────────────────────────────────────────────────────────────┐
+│                                                             │
+│              ┌───────────────────────────────┐              │
+│              │                               │              │
+│              │  ★  SPECIAL                   │              │
+│              │                               │              │
+│              │  Happy Hour Specials           │              │
+│              │                               │              │
+│              │  Half-price appetizers and     │              │
+│              │  $5 cocktails, weekdays 3–6 PM│              │
+│              │                               │              │
+│              └───────────────────────────────┘              │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
 
-### `announcement` — Future
+### `happy-hour` — Happy Hour Session
 
-- Full-screen text + optional background image
-- Used for custom messages (kitchen notes, wait time, etc.)
+- **Location**: `sessions/happy-hour/`
+- **Dev port**: 8506
+- **Content source**: Self-loaded from `public/happy-hour.json`
+- **Content loading**: Self-contained — fetches local JSON on mount (no postMessage content override)
+- **Theme**: Dark (#0f0a06) with gold accents (#c6893f), distinct from light menu theme
+- **Layout**: Header bar (title + countdown) above full-width card carousel
+- **Card layout**: Landscape split — image left, info right (dark variant)
+- **Transition**: Horizontal slide (700ms)
+- **Idle screen**: Garlic & Chives logo in gold, "Happy hour specials loading…"
+- **Components**:
+  - `HappyHourCard` — dark-themed card with image, name, category, description, price comparison, tag badge
+  - `CountdownTimer` — live HH:MM:SS countdown to configured end time; shows "ended" at zero
+- **Data fields (top-level)**: `title`, `subtitle`, `end_hour`, `end_minute`, `background_image`
+- **Data fields (specials)**: `name`, `category`, `description`, `price`, `original_price`, `image_path`, `tag`
+- **Price display**: Original price shown with strikethrough; happy hour price in gold
+- **Background**: Optional full-screen image behind dark gradient overlay
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Happy Hour                              ENDS IN            │
+│  Weekdays 3–6 PM                       02:34:15            │
+│                                        hr  min  sec        │
+│  ┌──────────────────────┬──────────────────────────────┐   │
+│  │                      │  COCKTAILS                   │   │
+│  │                      │                              │   │
+│  │      [image]         │  Passion Fruit Mojito        │   │
+│  │                      │                              │   │
+│  │         SPECIAL      │  Fresh passion fruit, mint...│   │
+│  │                      │                              │   │
+│  │                      │  $̶1̶3̶.̶0̶0̶  $7.00             │   │
+│  └──────────────────────┴──────────────────────────────┘   │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Future Sessions
+
+| Session | Description | Status |
+|---------|-------------|--------|
+| `events` | Upcoming events calendar/list driven by `events.json` | 🔲 Planned |
 
 ---
 
-## Shell Behavior
+## Shell Behavior (Orchestrator)
 
 ```
 Startup
-  └─ Load default session (menu) into iframe
-  └─ Connect to SSE
+  └─ Load default agent (menu) into iframe
+  └─ Connect to SSE (for menu content from backend)
+  └─ Start session scheduler (reads /schedule.json)
+  └─ Start health ping interval (every 10s)
+  └─ Initialize agent registry (empty)
+  └─ Initialize lastContentEnvelope = null
+  └─ Initialize sessionReady = false
 
-On SSE "session" event
-  └─ Update iframe src to session.url
-  └─ If session.display.duration set → schedule auto-return timer
+On agent message { type: 'register', capabilities }
+  └─ Set sessionReady = true
+  └─ registry.register(url, capabilities)
+  └─ Cancel load-timeout timer
+  └─ If lastContentEnvelope exists && registry.acceptsContent()
+     → forward it immediately (replay)
 
-On SSE "content" event
-  └─ Forward to active session via postMessage
+On agent message { type: 'status', state, detail }
+  └─ registry.updateState(state, detail)
 
-On session auto-return timeout
-  └─ Restore iframe src to default session URL
+On agent message { type: 'pong' }
+  └─ registry.recordPong()
+
+On scheduler fires (url, duration)
+  └─ If url === current agent → skip (no-op, reset return timer only)
+  └─ Set sessionReady = false
+  └─ registry.clear()
+  └─ Update iframe src to url
+  └─ Start load-timeout timer (SESSION_LOAD_TIMEOUT_MS)
+  └─ Schedule auto-return timer (duration seconds)
+
+On SSE event (content, cards, or items)
+  └─ Store as lastContentEnvelope
+  └─ If sessionReady && registry.acceptsContent()
+     → sendToAgent('content', data)
+
+On health ping interval
+  └─ If sessionReady → sendToAgent('ping')
+  └─ If !registry.isHealthy() → mark unresponsive, reload default agent
+
+On agent load-timeout
+  └─ If sessionReady still false → restore iframe src to default agent
+
+On agent auto-return timeout
+  └─ Restore iframe src to default agent URL
 ```
+
+### Session Scheduler
+
+The shell includes a local scheduler (`schedule.js`) that reads
+`/schedule.json` and controls when non-default sessions are shown.
+This decouples session timing from the backend — the backend provides
+menu content; the shell decides when to show announcements, happy hour, etc.
+
+The scheduler supports three rule types:
+
+| Type | Behavior |
+|------|----------|
+| `interval` | Fire every N minutes, all day |
+| `windowed` | Fire every N minutes within a time window (HH:MM–HH:MM) |
+| `fixed` | Fire at exact wall-clock times |
+
+All rules support an optional `days` filter (`["mon","tue",…]`).
+
+The scheduler checks all rules every 30 seconds. When a rule fires,
+the shell swaps the iframe to the session URL. After `duration_seconds`,
+the shell returns to the default menu session. Only one session switch
+fires per check cycle.
+
+See `shell/public/schedule.json` for the current configuration and
+`docs/guides/scheduling.md` for the configuration reference.
 
 ---
 
@@ -206,68 +540,191 @@ GAC-display/
 ├── DESIGN.md             ← this file
 ├── README.md             ← quick start
 ├── .gitignore
-├── shell/                ← persistent SSE shell
+├── lib/
+│   └── agent-sdk/        ← shared agent protocol SDK
+│       ├── protocol.js   ← message types, agent states (single source of truth)
+│       └── index.js      ← setupAgent, reportStatus, onContent, getImageUrl
+├── shell/                ← orchestrator: SSE subscriber, scheduler, agent lifecycle
 │   ├── package.json
-│   ├── vite.config.js
+│   ├── vite.config.js    ← @gac/agent-sdk alias → ../lib/agent-sdk
 │   ├── index.html
+│   ├── .env              ← VITE_SESSION_MENU_URL
+│   ├── public/
+│   │   └── schedule.json ← session scheduling config
 │   └── src/
 │       ├── main.jsx
-│       ├── App.jsx
-│       └── App.css
+│       ├── App.jsx       ← SSE, iframe, agent messaging, debug overlay
+│       ├── App.css       ← Fullscreen iframe + status/debug styles
+│       ├── schedule.js   ← session scheduler (interval/windowed/fixed)
+│       ├── protocol.js   ← re-exports from lib/agent-sdk/protocol.js
+│       └── registry.js   ← agent registry (capabilities, health, state, errors)
 ├── sessions/
-│   └── menu/             ← default menu display session
+│   ├── menu/             ← agent: rotating menu item cards
+│   │   ├── package.json
+│   │   ├── vite.config.js  ← @gac/agent-sdk alias → ../../lib/agent-sdk
+│   │   ├── index.html
+│   │   ├── .env          ← VITE_SHELL_ORIGIN
+│   │   └── src/
+│   │       ├── main.jsx
+│   │       ├── App.jsx   ← carousel logic, pause/resume
+│   │       ├── App.css   ← light theme, brand variables
+│   │       ├── components/
+│   │       │   ├── MenuItemCard.jsx
+│   │       │   └── MenuItemCard.css
+│   │       └── services/
+│   │           └── api.js  ← thin re-export from @gac/agent-sdk
+│   ├── announcement/     ← agent: full-screen text announcements
+│   │   ├── package.json
+│   │   ├── vite.config.js  ← @gac/agent-sdk alias
+│   │   ├── index.html
+│   │   ├── .env
+│   │   ├── public/
+│   │   │   └── announcements.json  ← announcement content
+│   │   └── src/
+│   │       ├── main.jsx
+│   │       ├── App.jsx   ← self-loading carousel, pause/resume
+│   │       ├── App.css   ← light theme (matches menu)
+│   │       ├── components/
+│   │       │   ├── MessageCard.jsx
+│   │       │   └── MessageCard.css
+│   │       └── services/
+│   │           └── api.js  ← thin re-export from @gac/agent-sdk
+│   └── happy-hour/       ← agent: specials with countdown timer
 │       ├── package.json
-│       ├── vite.config.js
+│       ├── vite.config.js  ← @gac/agent-sdk alias
 │       ├── index.html
+│       ├── .env
+│       ├── public/
+│       │   └── happy-hour.json  ← specials content + timing
 │       └── src/
 │           ├── main.jsx
-│           ├── App.jsx
-│           ├── App.css
+│           ├── App.jsx   ← self-loading, header + carousel, pause/resume
+│           ├── App.css   ← dark theme with gold accents
 │           ├── components/
-│           │   ├── MenuItemCard.jsx
-│           │   └── MenuItemCard.css
+│           │   ├── HappyHourCard.jsx
+│           │   ├── HappyHourCard.css
+│           │   ├── CountdownTimer.jsx
+│           │   └── CountdownTimer.css
 │           └── services/
-│               └── api.js
+│               └── api.js  ← thin re-export from @gac/agent-sdk
+├── test/
+│   └── mock-sse.mjs      ← mock SSE server for testing
 └── docs/
-    └── sessions.md       ← session implementation guide
+    ├── sessions.md        ← session implementation reference
+    └── guides/
+        ├── scheduling.md      ← schedule.json configuration
+        ├── announcements.md   ← announcement content management
+        ├── happy-hour.md      ← happy hour specials + countdown
+        └── adding-sessions.md ← how to create new session types
 ```
 
 ---
 
 ## Configuration
 
-All configuration is via environment variables / `.env` files.
+### Environment Variables (`.env` files)
 
-| Variable               | Location     | Default                      | Description                        |
-|------------------------|--------------|------------------------------|------------------------------------|
-| `VITE_BACKEND_URL`     | shell/.env   | `http://localhost:8000`      | Backend API base                   |
-| `VITE_SESSION_MENU_URL`| shell/.env   | `http://localhost:8504`      | Default session URL (dev)          |
-| `VITE_SHELL_ORIGIN`    | sessions/.env| `http://localhost:8503`      | Expected shell origin for postMessage |
+| Variable               | Location            | Default                      | Description                        |
+|------------------------|----------------------|------------------------------|------------------------------------|
+| `VITE_SESSION_MENU_URL`| `shell/.env`         | `http://localhost:8504`      | Default session URL (dev)          |
+| `VITE_SHELL_ORIGIN`   | `sessions/*/.env`     | `http://localhost:8503`      | Expected shell origin for postMessage |
+
+### Static Configuration Files
+
+| File | Location | Description |
+|------|----------|-------------|
+| `schedule.json` | `shell/public/` | Session scheduling rules (interval, windowed, fixed) |
+| `announcements.json` | `sessions/announcement/public/` | Announcement messages array |
+| `happy-hour.json` | `sessions/happy-hour/public/` | Happy hour specials, timing, background |
 
 ---
 
 ## Development Setup
 
 ```bash
-# Terminal 1 — menu session
-cd sessions/menu
-npm install && npm run dev      # http://localhost:8504
+# Terminal 1 — backend (provides menu data + images)
+cd ../GAC-Concierge && ./gac_service.sh start
 
-# Terminal 2 — shell
-cd shell
-npm install && npm run dev      # http://localhost:8503
+# Terminal 2 — menu session
+cd sessions/menu && npm install && npm run dev      # :8504
+
+# Terminal 3 — announcement session
+cd sessions/announcement && npm install && npm run dev  # :8505
+
+# Terminal 4 — happy-hour session
+cd sessions/happy-hour && npm install && npm run dev    # :8506
+
+# Terminal 5 — shell
+cd shell && npm install && npm run dev              # :8503
 ```
 
-Open `http://localhost:8503` — the shell loads the menu session in an iframe.
-The menu session can also be opened standalone at `http://localhost:8504`.
+Open `http://localhost:8503` — the shell loads the menu session by default.
+The scheduler will switch to announcements and happy hour based on
+`schedule.json`.
+
+### Testing without backend
+
+```bash
+HOST=192.168.10.3 node test/mock-sse.mjs    # :8000
+```
+
+The mock server cycles through menu content, session switches, and
+announcement content on a loop.
 
 ---
 
 ## Open Questions / Backlog
 
-- [ ] Migrate `display_agent.py` from legacy `items` key to typed `cards` envelope
-- [ ] Add `event_type` field to all SSE events (currently the shell infers from key presence)
+### Completed
+
+- [x] **Duplicate event fix**: Sessions detect iframe context and skip direct SSE when embedded
+- [x] **Session ready handshake**: Session posts `ready` on mount; shell buffers and replays content
+- [x] **Load timeout fallback**: Shell falls back to default session after `SESSION_LOAD_TIMEOUT_MS`
+- [x] **postMessage targetOrigin**: Shell sends with explicit session origin; sessions verify `e.origin`
+- [x] **event_type dispatch**: Shell dispatches on `data.event_type` with cards-based detection
+- [x] **Stale closure fix**: Shell uses `sessionUrlRef` to avoid stale `sessionUrl` in useEffect closures
+- [x] **Same-session skip**: Shell skips `sessionReady` reset when `loadSession` receives current URL
+- [x] **Announcement session**: Self-contained session with `announcements.json`, three message styles
+- [x] **Happy-hour session**: Dark-themed session with specials carousel and countdown timer
+- [x] **Session scheduler**: Shell-local scheduler with interval, windowed, and fixed rule types
+- [x] **Documentation**: Guides for scheduling, announcements, happy hour, and adding new sessions
+- [x] **Agent protocol**: Typed message protocol with `register`, `status`, `pong` from agents
+- [x] **Agent registration**: Sessions declare capabilities (cardTypes, selfLoading, acceptsContent)
+- [x] **Health monitoring**: Shell pings agents every 10s; auto-recovery on unresponsive
+- [x] **Agent registry**: Shell tracks capabilities, state, health, and errors of active agent
+- [x] **Status reporting**: Sessions report lifecycle state (idle, playing, paused, error, ended)
+- [x] **Shared agent SDK**: `lib/agent-sdk/` — single source of truth for protocol and SDK functions
+- [x] **Pause/resume protocol**: Orchestrator sends `pause`/`resume`, agents handle via `setupAgent()` callbacks
+- [x] **Capabilities-based routing**: Shell only forwards content to agents declaring `acceptsContent: true`
+- [x] **Debug overlay**: Dev-mode overlay showing agent state, card types, and error count
+
+### Backend Tasks (GAC-Concierge)
+
+- [ ] Add `event_type` field to all SSE events
+- [ ] Implement `event_type: 'session'` SSE directive for backend-driven session control
+
+### Frontend Improvements
+
+- [ ] Add React error boundaries to all sessions (prevent blank screen on render crash)
+- [ ] Implement per-card display override (`card.display.item_interval`)
+- [ ] Add periodic content refresh for self-loading sessions (announcement, happy-hour)
+- [ ] Build unified `CardRenderer` component shared across sessions
+- [ ] Add `special` and `promotion` card types
+- [ ] Add `events` session (upcoming events calendar)
+
+### Infrastructure
+
+- [ ] Add health/heartbeat endpoint to shell for remote monitoring
+- [ ] Production build pipeline and kiosk deployment guide
+- [ ] Automate schedule.json / announcements.json content updates without restart
+
+### Infrastructure / Ops
+
 - [ ] Decide on production serving strategy (FastAPI static mounts vs. nginx reverse proxy)
-- [ ] Shell: explicit `targetOrigin` for postMessage in production
-- [ ] Add `gac_service.sh` entries for GAC-display shell and menu session
-- [ ] `sessions/menu`: implement postMessage listener as fallback to direct SSE
+- [ ] Ensure HTTP/2 in production to avoid 6-connection SSE limit per domain on HTTP/1.1
+- [ ] Add `gac_service.sh` entries for GAC-display shell and all sessions
+- [ ] Add real images to happy-hour specials
+
+### Future Sessions
+
+- [ ] `events` — upcoming events calendar/list driven by `events.json`

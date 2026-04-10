@@ -1,0 +1,96 @@
+/* ── MessageCard ── */
+.message-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    width: 90vw;
+    max-width: 800px;
+    padding: clamp(2.5rem, 5vw, 5rem) clamp(2rem, 4vw, 4rem);
+    background: var(--color-card-bg);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-md);
+    gap: 1.25rem;
+    position: relative;
+    overflow: hidden;
+}
+
+/* Top accent bar — colour varies by style */
+.message-card__accent {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 5px;
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+}
+
+.message-card--info .message-card__accent {
+    background: var(--color-brand-green);
+}
+.message-card--warning .message-card__accent {
+    background: var(--color-brand-gold);
+}
+.message-card--promo .message-card__accent {
+    background: linear-gradient(90deg, var(--color-brand-green), var(--color-brand-gold));
+}
+
+/* Style label */
+.message-card__label {
+    font-family: var(--font-sans);
+    font-size: clamp(0.7rem, 1.2vw, 0.85rem);
+    font-weight: 600;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    margin-top: 0.5rem;
+}
+.message-card--info .message-card__label {
+    color: var(--color-brand-green);
+}
+.message-card--warning .message-card__label {
+    color: var(--color-brand-gold);
+}
+.message-card--promo .message-card__label {
+    color: var(--color-brand-green);
+}
+
+/* Headline */
+.message-card__headline {
+    font-family: var(--font-serif);
+    font-size: clamp(2rem, 4vw, 3.5rem);
+    font-weight: 600;
+    line-height: 1.2;
+    color: var(--color-text-main);
+    margin: 0;
+}
+.message-card--warning .message-card__headline {
+    color: #b8860b;
+}
+
+/* Divider */
+.message-card__divider {
+    width: 60px;
+    height: 2px;
+    border-radius: 2px;
+}
+.message-card--info .message-card__divider {
+    background: var(--color-brand-green);
+}
+.message-card--warning .message-card__divider {
+    background: var(--color-brand-gold);
+}
+.message-card--promo .message-card__divider {
+    background: var(--color-brand-gold);
+}
+
+/* Body */
+.message-card__body {
+    font-family: var(--font-sans);
+    font-size: clamp(1rem, 1.8vw, 1.35rem);
+    line-height: 1.7;
+    color: var(--color-text-muted);
+    max-width: 55ch;
+    margin: 0;
+}

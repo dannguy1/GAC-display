@@ -1,11 +1,10 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import MenuItemCard from './components/MenuItemCard';
-import { openDisplayStream, onContent, insideIframe, setupAgent, reportStatus } from './services/api';
+import MessageCard from './components/MessageCard';
+import { onContent, insideIframe, setupAgent, reportStatus } from './services/api';
 import './App.css';
 
-const ITEM_DISPLAY_SECONDS_DEFAULT = 8;
-const TRANSITION_MS = 700;
-const SSE_URL = '/v1/display/stream';
+const ITEM_DISPLAY_SECONDS_DEFAULT = 10;
+const TRANSITION_MS = 600;
 
 export default function App() {
     const [slides, setSlides] = useState([]);
@@ -25,7 +24,7 @@ export default function App() {
 
         setSlides(prev => [
             ...prev.map(s => ({ ...s, exiting: true })),
-            { id: `${next.item_name}-${Date.now()}`, item: next, exiting: false },
+            { id: `msg-${idx}-${Date.now()}`, data: next, exiting: false },
         ]);
 
         if (exitTimerRef.current) clearTimeout(exitTimerRef.current);
@@ -34,39 +33,38 @@ export default function App() {
         }, TRANSITION_MS + 50);
     }, []);
 
-    const startCarousel = useCallback(() => {
+    const startCarousel = useCallback((messages, interval) => {
+        if (!messages || messages.length === 0) return;
+        if (interval) itemIntervalRef.current = interval;
+
+        queueRef.current = messages;
+        indexRef.current = 0;
         if (timerRef.current) clearInterval(timerRef.current);
-        if (queueRef.current.length === 0) return;
-        advance(queueRef.current);
-        timerRef.current = setInterval(
-            () => { if (!pausedRef.current) advance(queueRef.current); },
-            itemIntervalRef.current * 1000
-        );
+        advance(messages);
+
+        if (messages.length > 1) {
+            timerRef.current = setInterval(
+                () => { if (!pausedRef.current) advance(queueRef.current); },
+                itemIntervalRef.current * 1000
+            );
+        }
     }, [advance]);
 
     const handleEnvelope = useCallback((envelope) => {
-        // Support both typed cards envelope and legacy flat items array
-        let items;
+        let messages;
         if (envelope.cards) {
-            items = envelope.cards.filter(c => c.type === 'menu_item').map(c => c.data);
+            messages = envelope.cards.filter(c => c.type === 'message').map(c => c.data);
         } else if (envelope.items) {
-            items = envelope.items;
+            messages = envelope.items;
         } else {
-            items = [];
-        }
-        if (items.length === 0) return;
-
-        if (envelope.display?.item_interval) {
-            itemIntervalRef.current = envelope.display.item_interval;
+            messages = [];
         }
 
-        queueRef.current = items;
-        indexRef.current = 0;
-        reportStatus('playing', { total: items.length });
-        startCarousel();
+        if (messages.length === 0) return;
+        startCarousel(messages, envelope.display?.item_interval);
+        reportStatus('playing', { total: messages.length });
     }, [startCarousel]);
 
-    // Agent pause/resume handlers
     const handlePause = useCallback(() => {
         pausedRef.current = true;
         reportStatus('paused');
@@ -78,36 +76,41 @@ export default function App() {
     }, []);
 
     useEffect(() => {
-        let es = null;
         let cleanupContent = null;
         let cleanupAgent = null;
 
+        // Self-load announcements from local data file
+        fetch('/announcements.json')
+            .then(r => r.ok ? r.json() : Promise.reject(r.status))
+            .then(messages => {
+                setConnected(true);
+                startCarousel(messages);
+                reportStatus('playing', { total: messages.length });
+            })
+            .catch(() => {
+                setConnected(false);
+                reportStatus('error', { reason: 'Failed to load announcements' });
+            });
+
+        // Also accept content pushed by the shell (overrides local data)
         if (insideIframe) {
             cleanupContent = onContent((envelope) => {
                 setConnected(true);
                 handleEnvelope(envelope);
             });
             cleanupAgent = setupAgent(
-                { cardTypes: ['menu_item'], selfLoading: false, acceptsContent: true },
+                { cardTypes: ['message'], selfLoading: true, acceptsContent: true },
                 { onPause: handlePause, onResume: handleResume }
             );
-        } else {
-            es = openDisplayStream(
-                SSE_URL,
-                (envelope) => { setConnected(true); handleEnvelope(envelope); },
-                () => setConnected(false)
-            );
-            es.addEventListener('ping', () => setConnected(true));
         }
 
         return () => {
-            es?.close();
             cleanupContent?.();
             cleanupAgent?.();
             if (timerRef.current) clearInterval(timerRef.current);
             if (exitTimerRef.current) clearTimeout(exitTimerRef.current);
         };
-    }, [handleEnvelope, handlePause, handleResume]);
+    }, [handleEnvelope, startCarousel, handlePause, handleResume]);
 
     return (
         <div className="session-root">
@@ -117,13 +120,13 @@ export default function App() {
                         <div className="session-idle__logo">Garlic &amp; Chives</div>
                         <div className="session-idle__divider" />
                         <div className="session-idle__sub">
-                            {connected ? 'Featured dishes loading…' : 'Connecting to server…'}
+                            {connected ? 'Waiting for announcements…' : 'Connecting to server…'}
                         </div>
                     </div>
                 )}
-                {slides.map(({ id, item, exiting }) => (
-                    <div key={id} className={`session-slot ${exiting ? 'slide-out' : 'slide-in'}`}>
-                        <MenuItemCard item={item} />
+                {slides.map(({ id, data, exiting }) => (
+                    <div key={id} className={`session-slot ${exiting ? 'fade-out' : 'fade-in'}`}>
+                        <MessageCard data={data} />
                     </div>
                 ))}
             </div>

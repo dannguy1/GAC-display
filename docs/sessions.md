@@ -1,40 +1,113 @@
-# Building New Sessions
+# Building New Sessions (Agents)
 
-A session is a self-contained web page that renders display content.
-It is loaded by the shell into a fullscreen `<iframe>`.
+A session is a **specialized agent** — a self-contained web page that renders
+display content. It is loaded by the shell (orchestrator) into a fullscreen
+`<iframe>`.
 
 ## Minimal Requirements
 
-A session page must:
+A session agent must:
 1. Fill the full viewport (`width: 100vw; height: 100vh`)
 2. Handle content gracefully when no data has arrived yet (idle/loading state)
-3. Accept content from **at least one** of the two delivery mechanisms below
+3. Detect its context and use the correct delivery path (see below)
+4. Register with the shell via `setupAgent()` when inside the iframe
+5. Report status changes via `reportStatus()`
+6. Handle `pause` and `resume` commands from the orchestrator
+
+## Shared Agent SDK
+
+All agent protocol logic lives in `lib/agent-sdk/`. Sessions import via the
+`@gac/agent-sdk` Vite alias. Each session's `services/api.js` is a thin
+re-export:
+
+```js
+export { insideIframe, setupAgent, reportStatus, onContent, getImageUrl } from '@gac/agent-sdk';
+```
+
+**Never duplicate protocol logic in session code.** Always import from the SDK.
 
 ## Content Delivery
 
-### Option A — Direct SSE (recommended for standalone use)
+Sessions use **exactly one** delivery path depending on context:
 
 ```js
-import { openDisplayStream } from './services/api';
+import { insideIframe } from '@gac/agent-sdk';
+```
 
-openDisplayStream((envelope) => {
-  const { display, cards, items } = envelope;
-  // render cards/items
+### Standalone mode (`insideIframe === false`)
+
+Connect directly to SSE:
+
+```js
+import { openDisplayStream } from '@gac/agent-sdk';
+
+openDisplayStream(SSE_URL, (envelope) => {
+  const { display, cards } = envelope;
+  // render cards
 });
 ```
 
-### Option B — postMessage from shell (automatic when inside iframe)
+### Iframe mode (`insideIframe === true`)
+
+Receive content from the shell via the SDK's `onContent()` helper. **Do not**
+open a direct SSE connection.
 
 ```js
-window.addEventListener('message', (e) => {
-  if (e.data?.source !== 'gac-display-shell') return;
-  const envelope = e.data.payload;
-  // render envelope.cards / envelope.items
+import { onContent } from '@gac/agent-sdk';
+
+const cleanup = onContent((envelope) => {
+  // Support both typed cards envelope and legacy flat items from backend
+  let items;
+  if (envelope.cards) {
+    items = envelope.cards.filter(c => c.type === 'menu_item').map(c => c.data);
+  } else if (envelope.items) {
+    items = envelope.items;
+  }
+  // render items
 });
 ```
 
-Both can be active simultaneously. Direct SSE takes effect when running
-standalone; postMessage takes effect when loaded inside the shell iframe.
+`onContent()` handles origin verification and source filtering automatically.
+
+### Agent Registration (required for iframe mode)
+
+After mounting, register with the orchestrator using `setupAgent()`. This
+declares capabilities, starts the auto-pong responder, and wires up
+pause/resume handlers:
+
+```js
+import { insideIframe, setupAgent, reportStatus } from '@gac/agent-sdk';
+
+if (insideIframe) {
+  const cleanup = setupAgent(
+    {
+      cardTypes: ['menu_item'],   // card types this agent handles
+      selfLoading: false,          // whether it loads its own data
+      acceptsContent: true,        // whether it accepts shell-forwarded content
+    },
+    {
+      onPause: () => { pausedRef.current = true; },
+      onResume: () => { pausedRef.current = false; },
+    }
+  );
+}
+```
+
+The shell buffers the latest content envelope and replays it on registration.
+
+Report state changes so the orchestrator can monitor agent health:
+
+```js
+reportStatus('playing', { total: items.length }); // content active
+reportStatus('paused');                             // paused by orchestrator
+reportStatus('error', { reason: 'Load failed' });  // error state
+reportStatus('ended');                              // content exhausted
+```
+
+> **Why not both?** Running both SSE and postMessage simultaneously causes every
+> content event to be processed twice (the shell forwards the same event the
+> session already received via SSE), resetting the carousel. It also wastes the
+> browser's 6-connection SSE limit on HTTP/1.1.
 
 ## Envelope Format
 
@@ -51,8 +124,7 @@ standalone; postMessage takes effect when loaded inside the shell iframe.
 }
 ```
 
-> Legacy: `items` (flat array of raw menu objects) is also supported
-> during migration. Prefer `cards` in new sessions.
+Agents filter cards by their declared `cardTypes`.
 
 ## Card Types
 
@@ -67,25 +139,10 @@ standalone; postMessage takes effect when loaded inside the shell iframe.
 
 1. Copy `sessions/menu/` as a starting point
 2. Change the port in `package.json` and `vite.config.js`
-3. Implement your card renderer(s)
-4. Register the session URL in the display-agent or send a `session` directive
+3. Add `@gac/agent-sdk` alias in `vite.config.js`
+4. Make `services/api.js` a thin re-export from `@gac/agent-sdk`
+5. Implement `setupAgent()` with capabilities + pause/resume handlers
+6. Report status via `reportStatus()`
+7. Add to `shell/public/schedule.json`
 
-## Session Directive (from display-agent)
-
-To trigger the shell to load your session:
-
-```json
-{
-  "event_type": "session",
-  "session": {
-    "type": "happy_hour",
-    "url": "http://gacaiserver:8000/sessions/happy-hour",
-    "display": {
-      "duration": 300
-    }
-  }
-}
-```
-
-If `duration` is set, the shell auto-returns to the default (menu) session
-after that many seconds.
+See `docs/guides/adding-sessions.md` for a detailed walkthrough.

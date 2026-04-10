@@ -42,3 +42,44 @@ html, body, #root {
 }
 .shell-status--live { color: #2e7d32; }
 .shell-status--off  { color: #d32f2f; }
+
+/* ── Agent debug overlay (dev mode only) ──────────────────────────── */
+.shell-debug {
+  position: fixed;
+  bottom: 1rem;
+  left: 1.2rem;
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  font-family: 'SF Mono', 'Consolas', monospace;
+  font-size: 0.65rem;
+  padding: 0.25rem 0.6rem;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.6);
+  color: #ccc;
+  opacity: 0.7;
+  pointer-events: none;
+  z-index: 9999;
+}
+
+.shell-debug__label {
+  color: #888;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.shell-debug__state { font-weight: 600; }
+.shell-debug__state--idle    { color: #90a4ae; }
+.shell-debug__state--playing { color: #66bb6a; }
+.shell-debug__state--paused  { color: #ffa726; }
+.shell-debug__state--error   { color: #ef5350; }
+.shell-debug__state--ended   { color: #78909c; }
+.shell-debug__state--unresponsive { color: #ef5350; }
+
+.shell-debug__caps {
+  color: #64b5f6;
+}
+
+.shell-debug__errors {
+  color: #ef5350;
+}

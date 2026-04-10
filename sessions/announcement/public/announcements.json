@@ -1,0 +1,17 @@
+[
+  {
+    "headline": "Welcome to Garlic & Chives!",
+    "body": "Authentic Vietnamese cuisine in the heart of Garden Grove.",
+    "style": "info"
+  },
+  {
+    "headline": "Happy Hour Specials",
+    "body": "Half-price appetizers and $5 house cocktails every weekday 3–6 PM.",
+    "style": "promo"
+  },
+  {
+    "headline": "Kitchen Closing at 9 PM",
+    "body": "Last orders will be taken at 8:45 PM. Thank you for dining with us!",
+    "style": "warning"
+  }
+]
