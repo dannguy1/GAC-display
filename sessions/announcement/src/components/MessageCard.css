@@ -5,14 +5,11 @@
     align-items: center;
     justify-content: center;
     text-align: center;
-    width: 90vw;
-    max-width: 800px;
-    padding: clamp(2.5rem, 5vw, 5rem) clamp(2rem, 4vw, 4rem);
+    width: 100vw;
+    height: 100vh;
+    padding: clamp(3rem, 6vw, 6rem) clamp(3rem, 8vw, 8rem);
     background: var(--color-card-bg);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-lg);
-    box-shadow: var(--shadow-md);
-    gap: 1.25rem;
+    gap: 1.5rem;
     position: relative;
     overflow: hidden;
 }
@@ -23,8 +20,8 @@
     top: 0;
     left: 0;
     right: 0;
-    height: 5px;
-    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    height: 6px;
+    border-radius: 0;
 }
 
 .message-card--info .message-card__accent {
@@ -40,11 +37,11 @@
 /* Style label */
 .message-card__label {
     font-family: var(--font-sans);
-    font-size: clamp(0.7rem, 1.2vw, 0.85rem);
+    font-size: clamp(0.85rem, 1.5vw, 1.1rem);
     font-weight: 600;
-    letter-spacing: 0.15em;
+    letter-spacing: 0.18em;
     text-transform: uppercase;
-    margin-top: 0.5rem;
+    margin-top: 0.75rem;
 }
 .message-card--info .message-card__label {
     color: var(--color-brand-green);
@@ -59,10 +56,11 @@
 /* Headline */
 .message-card__headline {
     font-family: var(--font-serif);
-    font-size: clamp(2rem, 4vw, 3.5rem);
+    font-size: clamp(2.5rem, 5.5vw, 5rem);
     font-weight: 600;
-    line-height: 1.2;
+    line-height: 1.15;
     color: var(--color-text-main);
+    max-width: 18ch;
     margin: 0;
 }
 .message-card--warning .message-card__headline {
@@ -71,8 +69,8 @@
 
 /* Divider */
 .message-card__divider {
-    width: 60px;
-    height: 2px;
+    width: 80px;
+    height: 3px;
     border-radius: 2px;
 }
 .message-card--info .message-card__divider {
@@ -88,9 +86,9 @@
 /* Body */
 .message-card__body {
     font-family: var(--font-sans);
-    font-size: clamp(1rem, 1.8vw, 1.35rem);
+    font-size: clamp(1.15rem, 2.2vw, 1.65rem);
     line-height: 1.7;
     color: var(--color-text-muted);
-    max-width: 55ch;
+    max-width: 65ch;
     margin: 0;
 }
