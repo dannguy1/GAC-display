@@ -1,0 +1,145 @@
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=Inter:wght@300;400;500;600;700&display=swap');
+
+:root {
+    --color-bg: #1a120b;
+    --color-bg-surface: #2c1f14;
+    --color-text: #f5efe6;
+    --color-text-muted: rgba(245, 239, 230, 0.55);
+    --color-accent: #d4473a;
+    --color-accent-light: #e85d50;
+    --color-gold: #c6893f;
+    --font-serif: 'Playfair Display', serif;
+    --font-sans: 'Inter', sans-serif;
+}
+
+*, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+html, body, #root {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    font-family: var(--font-sans);
+    background-color: var(--color-bg);
+    color: var(--color-text);
+    -webkit-font-smoothing: antialiased;
+}
+
+/* ── Session root ── */
+.ls-root {
+    position: relative;
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    background:
+        linear-gradient(180deg,
+            rgba(26, 18, 11, 0.85) 0%,
+            rgba(26, 18, 11, 0.95) 100%
+        );
+}
+
+/* ── Header bar ── */
+.ls-header {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: clamp(1rem, 2vw, 2rem) clamp(2rem, 4vw, 4rem);
+}
+
+.ls-header__title-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.ls-header__title {
+    font-family: var(--font-serif);
+    font-size: clamp(2rem, 4vw, 3.5rem);
+    font-weight: 600;
+    color: var(--color-accent-light);
+    line-height: 1.1;
+}
+
+.ls-header__subtitle {
+    font-family: var(--font-sans);
+    font-size: clamp(0.8rem, 1.2vw, 1rem);
+    color: var(--color-text-muted);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+
+/* ── Slide stage ── */
+.ls-stage {
+    position: relative;
+    z-index: 1;
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+
+.ls-slot {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Slide transitions */
+.ls-slide-in {
+    animation: lsSlideIn 0.7s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+.ls-slide-out {
+    animation: lsSlideOut 0.7s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+@keyframes lsSlideIn {
+    from { transform: translateX(100%); opacity: 0.4; }
+    to   { transform: translateX(0);    opacity: 1;   }
+}
+@keyframes lsSlideOut {
+    from { transform: translateX(0);     opacity: 1;   }
+    to   { transform: translateX(-100%); opacity: 0.4; }
+}
+
+/* ── Idle screen ── */
+.ls-idle {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    width: 100%;
+    height: 100%;
+}
+
+.ls-idle__logo {
+    font-family: var(--font-serif);
+    font-size: clamp(2.5rem, 5vw, 4.5rem);
+    color: var(--color-accent-light);
+    letter-spacing: 0.02em;
+}
+
+.ls-idle__divider {
+    width: 60px;
+    height: 2px;
+    background: linear-gradient(90deg, var(--color-accent) 0%, var(--color-gold) 100%);
+    border-radius: 2px;
+}
+
+.ls-idle__sub {
+    font-family: var(--font-sans);
+    font-size: 1rem;
+    color: var(--color-text-muted);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}

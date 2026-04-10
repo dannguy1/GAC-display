@@ -12,6 +12,7 @@
       "price": 5.00,
       "original_price": 8.00,
       "image_path": "",
+      "video_path": "",
       "tag": "Half Price"
     },
     {
@@ -21,24 +22,27 @@
       "price": 7.00,
       "original_price": 13.00,
       "image_path": "",
+      "video_path": "media/DancingCocktail-1.mp4",
       "tag": "Special"
     },
     {
-      "name": "Crispy Spring Rolls",
+      "name": "Garlic & Chives Wings",
       "category": "Appetizers",
-      "description": "Pork and shrimp spring rolls with house dipping sauce.",
+      "description": "Finger licking good wings with garlic and chives.",
       "price": 5.50,
       "original_price": 10.95,
       "image_path": "",
+      "video_path": "media/TastyWing.mp4",
       "tag": "Half Price"
     },
     {
-      "name": "Salt & Pepper Calamari",
+      "name": "Kristin's Calamari",
       "category": "Appetizers",
       "description": "Lightly battered calamari with garlic, jalapeño, and lime salt.",
       "price": 6.00,
       "original_price": 11.95,
-      "image_path": "",
+      "image_path": "media/Calamari.png",
+      "video_path": "",
       "tag": "Half Price"
     },
     {
@@ -48,6 +52,7 @@
       "price": 3.50,
       "original_price": 5.50,
       "image_path": "",
+      "video_path": "",
       "tag": "Special"
     }
   ]

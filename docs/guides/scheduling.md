@@ -178,12 +178,54 @@ fires per check cycle (every 30 seconds).
 
 ## How It Works
 
-- The shell loads `schedule.json` on startup.
+- The shell loads `schedule.json` once on startup.
 - A background timer checks all rules every 30 seconds.
 - When a rule fires, the shell swaps the iframe to the session URL.
 - After `duration_seconds`, the shell returns to the default menu session.
+- Rules are evaluated in array order — the first match wins per tick.
 - If the schedule file is missing or fails to load, the scheduler stays
   idle and the menu runs uninterrupted.
+
+### Session Switching Behavior
+
+**Switching is immediate.** When the scheduler fires, the shell changes
+the iframe `src` directly. The previous agent's page is unloaded by the
+browser — there is no "prepare to exit" message. This is acceptable for
+a kiosk display where there is no user state to save.
+
+The shell does send `pause` and `resume` messages, but these are for
+temporarily pausing playback within an active session, not for session
+transitions.
+
+### Duration and Early Exit
+
+The `duration_seconds` field is a **maximum display time**. The shell
+always waits for the full duration before returning to the default
+session — even if the agent finishes its content early.
+
+For example, if an announcement session has one message that displays
+for 10 seconds but `duration_seconds` is 30, the agent will loop or
+sit idle for the remaining 20 seconds.
+
+To avoid dead time, size `duration_seconds` to match your content:
+
+| Content | Suggested duration |
+|---------|--------------------|
+| 3 announcements × 10s each | `30` |
+| 5 happy-hour specials × 8s each | `45` |
+| Single fixed announcement | `15` |
+
+> **Note:** The agent protocol defines a `status: 'ended'` state that
+> agents could report when their content finishes. The shell currently
+> records this state but does not act on it — early return on `ended`
+> is a planned improvement.
+
+### Only One Agent at a Time
+
+The shell renders a single `<iframe>`. Only one agent runs at any time.
+Agent overlap is structurally impossible — swapping the iframe `src`
+unloads the previous page before loading the new one. The agent registry
+is cleared on every swap and repopulated when the new agent registers.
 
 ## Applying Changes
 

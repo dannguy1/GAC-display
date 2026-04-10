@@ -1,0 +1,14 @@
+{
+  "title": "Lunch Specials",
+  "subtitle": "Monday–Friday 11 AM – 3 PM",
+  "end_hour": 15,
+  "end_minute": 0,
+  "specials": [
+    { "item_name": "Pho French Dip", "price": 13.95, "tag": "Best Seller", "includes": "Pho + Iced Tea" },
+    { "item_name": "Shrimp Rice Porridge", "price": 11.95, "tag": "Lunch Only", "includes": "Porridge + Iced Tea" },
+    { "item_name": "Garlic Butter Chicken", "price": 12.50, "tag": "Popular", "includes": "Chicken + Small Rice + Iced Tea" },
+    { "item_name": "Thai Calamari Salad", "price": 13.50, "tag": "New", "includes": "Salad + Cup of Pho + Iced Tea" },
+    { "item_name": "Fried Chili Lemongrass Salmon", "price": 12.95, "tag": "Lunch Only", "includes": "Rice Plate + Soup + Iced Tea" },
+    { "item_name": "Combination Chowfun", "price": 12.50, "tag": "Lunch Only", "includes": "Chowfun + Iced Tea" }
+  ]
+}

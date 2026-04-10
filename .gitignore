@@ -6,3 +6,7 @@ dist/
 
 # Agent work artifacts
 .agent_work/
+
+# Service script runtime
+logs/
+.pids/

@@ -1,8 +1,7 @@
 {
   "sessions": {
     "announcement": "http://192.168.10.3:8505",
-    "happy-hour": "http://192.168.10.3:8506",
-    "lunch-special": "http://192.168.10.3:8507"
+    "happy-hour": "http://192.168.10.3:8506"
   },
   "schedule": [
     {
@@ -19,15 +18,6 @@
       "every_minutes": 5,
       "days": ["mon", "tue", "wed", "thu", "fri"],
       "duration_seconds": 45
-    },
-    {
-      "session": "lunch-special",
-      "type": "windowed",
-      "start_time": "11:00",
-      "end_time": "15:00",
-      "every_minutes": 1,
-      "days": ["mon", "tue", "wed", "thu", "fri"],
-      "duration_seconds": 14400
     }
   ]
 }

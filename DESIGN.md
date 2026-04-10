@@ -33,6 +33,7 @@ making it easy to add new display agents without touching existing ones.
         │  sessions/menu         ← DEFAULT   │
         │  sessions/announcement ← scheduled │
         │  sessions/happy-hour   ← scheduled │
+        │  sessions/lunch-special← scheduled │
         └────────────────────────────────────┘
 ```
 
@@ -50,6 +51,46 @@ pings. Only one agent is active at a time.
 | Menu session | Agent | Menu card rendering, slide carousel |
 | Announcement session | Agent | Announcement content + rendering |
 | Happy-hour session | Agent | Specials content + rendering, countdown |
+| Lunch-special session | Agent | Lunch combo content + rendering, countdown |
+
+### Why Menu Uses Shell-Forwarded SSE (Not Self-Loading)
+
+The menu agent's content delivery differs from announcement and happy-hour by
+design. This table summarizes the three patterns:
+
+| Agent | `selfLoading` | `acceptsContent` | Data Source |
+|-------|:---:|:---:|---|
+| Menu | `false` | `true` | Shell SSE → postMessage |
+| Announcement | `true` | `true` | Self-loads JSON; accepts shell override |
+| Happy-hour | `true` | `false` | Self-loads JSON only |
+| Lunch-special | `true` | `false` | Config JSON + brief direct SSE for menu item lookup |
+
+The asymmetry comes from a real difference in data sources, not from
+inconsistent architecture:
+
+**Menu data is live-streamed; other sessions use static JSON.** The backend's
+display-agent pushes menu items over SSE. Announcement and happy-hour content
+comes from local JSON files that change infrequently. Self-loading is natural
+for static data; shell forwarding is natural for a live stream.
+
+**The shell holds a persistent SSE connection that survives agent swaps.** Menu
+is the default agent (~95% of runtime). It is swapped out briefly for
+announcement (30s) or happy-hour (45s), then swapped back. If menu owned its
+own SSE connection, it would reconnect on every swap-back — introducing latency
+and risking missed events during the reconnect window. The shell's persistent
+connection avoids this entirely.
+
+**The shell buffers the last content envelope as a menu item queue.** When
+menu re-registers after a swap, the shell replays `lastContentRef` immediately.
+This means the menu agent always has content on first render — no blank screen
+while waiting for the next SSE push. The shell effectively acts as a content
+queue, remembering the current menu item set across session transitions.
+
+**The shell forwards blindly — it does not parse cards.** The shell stores and
+forwards raw content envelopes without filtering by card type. Agents filter by
+their declared `cardTypes` themselves. If the backend later pushes announcement
+or promotion cards over SSE, any agent declaring `acceptsContent: true` would
+receive them without shell changes.
 
 ---
 
@@ -449,6 +490,46 @@ function CardRenderer({ card }) {
 └─────────────────────────────────────────────────────────────┘
 ```
 
+### `lunch-special` — Lunch Specials Session
+
+- **Location**: `sessions/lunch-special/`
+- **Dev port**: 8507
+- **Content source**: Config overlay from `public/lunch-specials.json` + menu items fetched from backend SSE
+- **Content loading**: Hybrid — loads a lightweight config (item names + special prices), then opens a brief SSE connection to fetch full menu item details from the backend. Merges the two: menu item fields (image, description, category, Vietnamese name, regular price) are enriched with the config's special pricing and combo includes. SSE is closed after the first batch.
+- **Theme**: Warm dark (#1a120b) with red accents (#d4473a) and gold highlights
+- **Layout**: Header bar (title + countdown) above full-width card carousel
+- **Card layout**: Landscape split — image left, info right (menu-style with price comparison)
+- **Transition**: Horizontal slide (700ms)
+- **Idle screen**: Garlic & Chives logo in red, "Lunch specials loading…" → "Fetching menu data…"
+- **Components**:
+  - `LunchSpecialCard` — warm-themed card with image, Vietnamese name, category, description, combo includes, price comparison, tag badge
+  - `CountdownTimer` — live HH:MM:SS countdown to lunch end time
+- **Config fields** (`lunch-specials.json`):
+  - Top-level: `title`, `subtitle`, `end_hour`, `end_minute`
+  - Per-special: `item_name` (must match backend menu item name), `price` (lunch special price), `tag`, `includes`
+- **Merged card fields** (after SSE lookup): `item_name`, `item_viet`, `category`, `description`, `image_path`, `original_price` (regular menu price), `price` (lunch special), `tag`, `includes`
+- **Data flow**: Config specials specify *which* menu items are on special and at *what price*. All other details (image, description, Vietnamese name, category, regular price) come from the live menu database — so cards stay current without config updates when menu data changes.
+- **Combo highlight**: `includes` field displays what's bundled (e.g., "Pho + Spring Roll + Iced Tea")
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Lunch Specials                       LUNCH ENDS IN         │
+│  Monday–Friday 11 AM – 3 PM            01:22:45            │
+│                                        hr  min  sec        │
+│  ┌──────────────────────┬──────────────────────────────┐   │
+│  │                      │  COMBO                       │   │
+│  │                      │                              │   │
+│  │      [image]         │  Phở Combo                   │   │
+│  │                      │  Phở Đặc Biệt Combo         │   │
+│  │       BEST SELLER    │  ───                         │   │
+│  │                      │  Choice of beef pho with...  │   │
+│  │                      │  Includes: Pho + Spring Roll │   │
+│  │                      │  $̶1̶7̶.̶9̶0̶  $12.95             │   │
+│  └──────────────────────┴──────────────────────────────┘   │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
 ### Future Sessions
 
 | Session | Description | Status |
@@ -607,6 +688,23 @@ GAC-display/
 │           │   └── CountdownTimer.css
 │           └── services/
 │               └── api.js  ← thin re-export from @gac/agent-sdk
+│   └── lunch-special/    ← agent: lunch combos with countdown timer
+│       ├── package.json
+│       ├── vite.config.js  ← @gac/agent-sdk alias
+│       ├── index.html
+│       ├── public/
+│       │   └── lunch-specials.json  ← lunch combo content + timing
+│       └── src/
+│           ├── main.jsx
+│           ├── App.jsx   ← self-loading, header + carousel, pause/resume
+│           ├── App.css   ← warm dark theme with red accents
+│           ├── components/
+│           │   ├── LunchSpecialCard.jsx
+│           │   ├── LunchSpecialCard.css
+│           │   ├── CountdownTimer.jsx
+│           │   └── CountdownTimer.css
+│           └── services/
+│               └── api.js  ← thin re-export from @gac/agent-sdk
 ├── test/
 │   └── mock-sse.mjs      ← mock SSE server for testing
 └── docs/
@@ -636,6 +734,7 @@ GAC-display/
 | `schedule.json` | `shell/public/` | Session scheduling rules (interval, windowed, fixed) |
 | `announcements.json` | `sessions/announcement/public/` | Announcement messages array |
 | `happy-hour.json` | `sessions/happy-hour/public/` | Happy hour specials, timing, background |
+| `lunch-specials.json` | `sessions/lunch-special/public/` | Lunch combo specials and timing |
 
 ---
 
@@ -654,7 +753,10 @@ cd sessions/announcement && npm install && npm run dev  # :8505
 # Terminal 4 — happy-hour session
 cd sessions/happy-hour && npm install && npm run dev    # :8506
 
-# Terminal 5 — shell
+# Terminal 5 — lunch-special session
+cd sessions/lunch-special && npm install && npm run dev # :8507
+
+# Terminal 6 — shell
 cd shell && npm install && npm run dev              # :8503
 ```
 
