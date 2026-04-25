@@ -714,7 +714,57 @@ GAC-display/
         ├── announcements.md   ← announcement content management
         ├── happy-hour.md      ← happy hour specials + countdown
         └── adding-sessions.md ← how to create new session types
+Pi-Setup/                 ← INFRASTRUCTURE ONLY — not part of the web app
+├── provision-kiosk.sh    ← run from server to set up a new Pi kiosk (12-step)
+├── kiosk-setup.sh        ← deployed to Pi: IP management + status
+├── kiosk-schedule.sh     ← deployed to Pi: daily start/stop + Chromium launcher
+├── kiosk.conf            ← template config (server IP/port) deployed to Pi
+├── pi-kiosk-setup.md     ← full setup guide, verification, troubleshooting
+└── templates/            ← labwc/kanshi config templates copied to Pi during provisioning
+    ├── labwc-autostart
+    ├── labwc-environment
+    ├── labwc-system-autostart
+    └── kanshi-config
 ```
+
+---
+
+## Hardware Deployment (Pi-Setup)
+
+`Pi-Setup/` is **infrastructure tooling** for deploying the GAC-Display web app onto
+Raspberry Pi 4 kiosk hardware. It is completely separate from the web application code
+and has no runtime dependency on the shell or session pages.
+
+### Role in the System
+
+| Layer | What it does |
+|-------|--------------|
+| **GAC-Concierge** | Runs on the server — provides menu data and SSE stream |
+| **GAC-Display** (shell + sessions) | Runs on the server — serves the web app |
+| **Pi-Setup** | Configures Pi hardware to open the shell URL in a fullscreen kiosk browser |
+
+Each provisioned Pi is a **thin client**: it does nothing but open Chromium in fullscreen
+cyling to `http://<SERVER_IP>:8503`. All application logic lives on the server.
+
+### What the provisioner configures
+
+- Chromium in fullscreen kiosk mode via labwc (Wayland), no desktop or taskbar
+- Display locked to 1920×1080@60 Hz via kanshi and firmware config
+- Daily on/off schedule via cron (default: on 07:55, off 00:00)
+- Performance tuning: GPU memory, swappiness, Xwayland disabled, screen blanking off
+
+### Usage
+
+Run once from the GAC server for each new Pi:
+
+```bash
+cd Pi-Setup
+./provision-kiosk.sh <PI_IP> [SERVER_IP]   # e.g. ./provision-kiosk.sh 192.168.10.70 192.168.10.3
+ssh gac@<PI_IP> 'sudo reboot'
+```
+
+See [`Pi-Setup/README.md`](Pi-Setup/README.md) for the quick-start guide and
+[`Pi-Setup/pi-kiosk-setup.md`](Pi-Setup/pi-kiosk-setup.md) for the full reference.
 
 ---
 

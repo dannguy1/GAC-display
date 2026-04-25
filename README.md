@@ -41,6 +41,7 @@ docs/
   guides/           ← configuration and authoring guides
 test/
   mock-sse.mjs      ← mock SSE server for testing
+Pi-Setup/           ← Raspberry Pi kiosk provisioning tooling (not part of the web app)
 ```
 
 ## Sessions
@@ -78,6 +79,25 @@ sends announcement content → switches back to menu.
 
 The shell's local scheduler also fires session switches based on
 `shell/public/schedule.json` — see `docs/guides/scheduling.md`.
+
+## Pi Kiosk Deployment
+
+`Pi-Setup/` contains all tooling for provisioning Raspberry Pi 4 units as physical kiosks.
+This is **infrastructure tooling only** — it is not part of the web application itself.
+
+The provisioner configures a fresh Pi to:
+- Launch Chromium in fullscreen, connecting to the GAC-Display shell URL
+- Run on labwc (Wayland) without desktop/taskbar overhead
+- Follow a daily on/off schedule (default: on at 07:55, off at 00:00)
+- Lock display to 1920×1080@60 Hz
+
+```bash
+# From the GAC server — provision a new Pi:
+cd Pi-Setup && ./provision-kiosk.sh <PI_IP> [SERVER_IP]
+```
+
+See **[Pi-Setup/README.md](Pi-Setup/README.md)** for the quick-start guide and
+**[Pi-Setup/pi-kiosk-setup.md](Pi-Setup/pi-kiosk-setup.md)** for the full setup reference.
 
 ## Related
 
